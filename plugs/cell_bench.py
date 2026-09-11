@@ -59,7 +59,7 @@ class CellBench:
         """Chamber pumped and held; pressure logged every 5 min. The cell
         rests open-circuit inside. Time-scaled."""
         t = np.arange(0.0, hours + 1.0 / 12, 1.0 / 12)
-        p = 1013.0 * np.exp(-t * 9.0) + 4e-4 * (1.0 + 0.2 * np.exp(-t))
+        p = 1013.0 * np.exp(-t * 40.0) + 4e-4 * (1.0 + 0.2 * np.exp(-t))
         # What the exposure does to a healthy cell: almost nothing.
         self._ocv -= 0.0004
         self._cap_ah *= 0.994

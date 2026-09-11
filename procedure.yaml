@@ -1,0 +1,166 @@
+name: Battery Cell Screening with Vacuum
+version: 0.1.0
+description: 100 % screening of COTS 18650 cells for a smallsat battery. Visual in setup, then mass, OCV, ACIR at 1 kHz and a C/2 discharge capacity before and after six hours under vacuum, the cell accepted on how little the four numbers changed, after the NR-SRD-139 criteria.
+
+unit:
+  auto_identify: true
+  serial_number:
+    description: "Scan the cell's laser mark"
+    placeholder: "CELL-35E-000000"
+    pattern: "^CELL-35E-\\d{6}$"
+    default_value: "CELL-35E-041872"
+  part_number:
+    default_value: "INR18650-35E"
+  batch_number:
+    default_value: "LOT-2026-09"
+
+plugs:
+  - name: Cell Bench
+    description: "Cycler channel with a four-wire holder, AC impedance meter, analytical balance, vacuum chamber with gauge (mock, one plug per bench)"
+    python: plugs.cell_bench:CellBench
+    key: bench
+
+setup:
+  - name: Identify
+    key: identify
+    python: phases.identify
+    measurements:
+      - name: Visual
+        key: visual_ok
+        validators:
+          - {operator: "==", expected_value: true}
+
+main:
+  - name: Pre Screen
+    key: pre_screen
+    python: phases.pre_screen
+    timeout: 4h
+    measurements:
+      - name: Mass Before
+        key: mass_pre_g
+        unit: g
+        validators:
+          - {operator: ">=", expected_value: 47.5}
+          - {operator: "<=", expected_value: 49.0}
+      - name: OCV Before
+        key: ocv_pre_v
+        unit: V
+        validators:
+          - {operator: ">=", expected_value: 3.55}
+          - {operator: "<=", expected_value: 3.75}
+      - name: ACIR Before
+        key: acir_pre_mohm
+        unit: mΩ
+        validators:
+          - {operator: "<=", expected_value: 30.0}
+      - name: Discharge Before
+        key: discharge_pre
+        title: C/2 discharge to 3.0 V before the vacuum exposure
+        x_axis:
+          legend: Capacity
+          unit: Ah
+        y_axis:
+          - legend: Voltage
+            key: voltage
+            unit: V
+            aggregations:
+              - type: capacity_ah
+                unit: Ah
+                validators:
+                  - {operator: ">=", expected_value: 3.30}
+
+  - name: Vacuum
+    key: vacuum
+    python: phases.vacuum
+    depends_on: [pre_screen]
+    timeout: 12h
+    ui:
+      components:
+        - key: vacuum_progress
+          type: progress
+          label: "Vacuum exposure"
+          description: "6 h at or below 1e-3 hPa, open-circuit"
+          default_value: 0
+          max: 100
+    measurements:
+      - name: Exposure
+        key: exposure
+        title: Chamber pressure through the exposure
+        x_axis:
+          legend: Time
+          unit: h
+        y_axis:
+          - legend: Pressure
+            key: pressure
+            unit: hPa
+            aggregations:
+              - type: min_hpa
+                unit: hPa
+                validators:
+                  - {operator: "<=", expected_value: 1.0e-3}
+              - type: hours_under_h
+                unit: h
+                validators:
+                  - {operator: ">=", expected_value: 5.5}
+
+  - name: Post Screen
+    key: post_screen
+    python: phases.post_screen
+    depends_on: [vacuum]
+    timeout: 4h
+    measurements:
+      - name: Mass After
+        key: mass_post_g
+        unit: g
+      - name: OCV After
+        key: ocv_post_v
+        unit: V
+      - name: ACIR After
+        key: acir_post_mohm
+        unit: mΩ
+      - name: Discharge After
+        key: discharge_post
+        title: C/2 discharge to 3.0 V after the vacuum exposure
+        x_axis:
+          legend: Capacity
+          unit: Ah
+        y_axis:
+          - legend: Voltage
+            key: voltage
+            unit: V
+            aggregations:
+              - type: capacity_ah
+                unit: Ah
+                validators:
+                  - {operator: ">=", expected_value: 3.30}
+      - name: OCV Delta
+        key: ocv_delta_pct
+        unit: "%"
+        description: NR-SRD-139 acceptance on the change in open-circuit voltage.
+        validators:
+          - {operator: "<=", expected_value: 0.1}
+      - name: Capacity Delta
+        key: capacity_delta_pct
+        unit: "%"
+        validators:
+          - {operator: "<=", expected_value: 5.0}
+      - name: Mass Delta
+        key: mass_delta_pct
+        unit: "%"
+        description: A cell that lost mass under vacuum vented; the balance sees it before anything else does.
+        validators:
+          - {operator: "<=", expected_value: 0.1}
+      - name: ACIR Delta
+        key: acir_delta_pct
+        unit: "%"
+        validators:
+          - {operator: "<=", expected_value: 20.0}
+
+teardown:
+  - name: Release
+    key: release
+    python: phases.release
+    measurements:
+      - name: OCV At Storage
+        key: ocv_storage_v
+        unit: V
